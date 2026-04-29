@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // 可切换为 "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  authingId    String    @unique
+  openid       String?   @unique
+  nickname     String?
+  avatar       String?
+  email        String?
+  phone        String?
+  tier         UserTier  @default(FREE)
+  subscription Subscription?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+enum UserTier {
+  FREE
+  STANDARD
+  PREMIUM
+}
+
+model Subscription {
+  id           String     @id @default(uuid())
+  userId       String     @unique
+  plan         UserTier
+  status       SubscriptionStatus
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAt     DateTime?
+  paymentMethod String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  user         User       @relation(fields: [userId], references: [id])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  UNPAID
+}
