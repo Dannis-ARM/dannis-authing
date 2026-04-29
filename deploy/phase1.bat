@@ -1,42 +1,39 @@
 @echo off
 echo ==============================================
-echo Phase 1: 项目初始化脚本
+echo FinSuite 企业服务平台 - 项目初始化脚本
 echo ==============================================
 echo.
 
-echo 1. 初始化 Next.js + TypeScript + Tailwind 项目
+echo 1. 安装项目依赖
 echo ----------------------------------------------
-pnpm create next-app@latest . --typescript --tailwind --app --eslint --no-src-dir --import-alias "@/*" --experimental-app --yes
+pnpm install
 echo.
 
-echo 2. 安装 Prisma ORM
+echo 2. 配置数据库
 echo ----------------------------------------------
-pnpm add prisma --save-dev
-pnpm add @prisma/client
+echo 默认使用 SQLite，如需切换到 PostgreSQL 请修改 prisma/schema.prisma
+pnpm prisma generate
+pnpm prisma migrate dev --name init
 echo.
 
-echo 3. 初始化 Prisma 配置
+echo 3. 复制环境变量配置
 echo ----------------------------------------------
-pnpm prisma init
+if not exist .env (
+  copy .env.example .env
+  echo 已创建 .env 文件，请配置相关参数
+) else (
+  echo .env 文件已存在，跳过复制
+)
 echo.
 
-echo 4. 初始化 ShadCN UI 组件库
+echo 4. 启动开发服务器
 echo ----------------------------------------------
-pnpm dlx shadcn@latest init
-echo.
-
-echo 5. 创建基础目录结构
-echo ----------------------------------------------
-mkdir components components\ui components\auth components\subscription components\layout lib lib\auth lib\db lib\payment types app\(auth) app\(auth)\login app\(auth)\callback app\(dashboard) app\(dashboard)\free app\(dashboard)\standard app\(dashboard)\premium app\(dashboard)\profile app\(dashboard)\subscription app\(marketing) app\(marketing)\pricing app\(marketing)\features app\api app\api\auth app\api\subscription app\api\webhook
-echo.
-
-echo 6. 复制环境变量模板
-echo ----------------------------------------------
-copy .env.example .env
+echo 初始化完成，执行 pnpm dev 启动开发服务器
+echo 访问 http://localhost:3000 查看项目
 echo.
 
 echo ==============================================
-echo Phase 1 初始化完成!
-echo 下一步请配置 .env 文件中的相关参数
+echo 初始化完成!
+echo 请先配置 .env 文件中的 Authing、数据库等参数
 echo ==============================================
 pause
