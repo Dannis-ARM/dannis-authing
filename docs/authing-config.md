@@ -4,7 +4,7 @@
 
 ## 前置准备
 1. 已注册 Authing 账号（https://authing.cn/）
-2. 已经完成项目初始化（参考 [INSTALL.md](./INSTALL.md)）
+2. 已经完成项目初始化（参考 [installation.md](./installation.md)）
 
 ---
 
@@ -14,18 +14,23 @@
 1. 登录 Authing 控制台，选择 "自建应用"
 2. 点击右上角 "创建应用"
 3. 填写应用信息：
-   - 应用名称：FinSuite 企业服务平台
+   - 应用名称：dannis-authing 企业服务平台
    - 应用类型：选择 "Web 应用"
-   - 认证地址：自定义一个前缀，比如 `finsuite`，你的完整域名就是 `finsuite.authing.cn`
+   - 认证地址：自定义一个前缀，比如 `dannis-authing`，你的完整域名就是 `dannis-authing.authing.cn`
 4. 点击 "创建"
 
 ### 第二步：获取核心配置参数
 创建完成后，在应用详情页可以获取到三个关键参数，填写到 `.env` 文件中：
 ```env
-AUTHING_APP_ID=应用详情页的 "应用 ID"
-AUTHING_APP_SECRET=应用详情页的 "应用密钥"
-AUTHING_DOMAIN=你刚才设置的认证地址，比如 `finsuite.authing.cn`
+# 客户端使用的参数需要加 NEXT_PUBLIC_ 前缀
+NEXT_PUBLIC_AUTHING_APP_ID=应用详情页的 "应用 ID"
+AUTHING_APP_SECRET=应用详情页的 "应用密钥" # 敏感信息，不要加前缀
+NEXT_PUBLIC_AUTHING_DOMAIN=你刚才设置的认证地址，比如 `dannis-authing.authing.cn`
 ```
+
+> ⚠️ 重要说明：
+> 1. Next.js 中只有前缀为 `NEXT_PUBLIC_` 的环境变量才能在浏览器端访问，所以客户端使用的 APP_ID 和 DOMAIN 需要加此前缀，而 APP_SECRET 是服务端敏感信息，绝对不要加前缀。
+> 2. 环境变量全大写是**行业通用标准约定**，目的是和代码中的变量区分开，一目了然是配置项，不是强制性要求但强烈推荐遵循。
 
 ### 第三步：配置回调地址
 1. 在应用详情页左侧菜单选择 "应用配置" → "认证配置"
