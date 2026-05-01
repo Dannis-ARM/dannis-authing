@@ -17,6 +17,9 @@ RUN pnpm install --frozen-lockfile
 # 复制所有代码
 COPY . .
 
+# 生成Prisma客户端
+RUN pnpm prisma generate
+
 # 构建Next.js应用，启用standalone模式
 RUN pnpm build
 
