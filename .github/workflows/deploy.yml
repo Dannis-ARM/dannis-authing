@@ -160,7 +160,8 @@ jobs:
           username: ${{ secrets.ALIYUN_SSH_USER }}
           key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
           port: 22
-          envs: GITHUB_TOKEN,REGISTRY,IMAGE_NAME,BWS_ACCESS_TOKEN,BWS_PROJECT_ID
+          # 仅传递必要的环境变量，敏感变量直接通过表达式注入更安全
+          envs: IMAGE_NAME
           script: |
             set -e
             echo "🚀 开始部署服务..."
@@ -168,7 +169,7 @@ jobs:
             export PATH=$PATH:~/.local/bin
             
             # 从BWS拉取阿里云ACR配置
-            eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
+            eval "$(bws secret list -o env "${{ secrets.BWS_PROJECT_ID }}" | grep -E 'ALIYUN_ACR_')"
             
             # 检查ACR配置是否完整
             if [ -z "$ALIYUN_ACR_USER" ] || [ -z "$ALIYUN_ACR_PASSWORD" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
@@ -187,9 +188,9 @@ jobs:
             mkdir -p ~/.activate/dannis-authing
             cd ~/.activate/dannis-authing
             
-            # 3. 解码base64内容写入compose.yaml并使用jq直接赋值ACR镜像地址（更可靠）
+            # 3. 解码base64内容写入compose.yaml，然后替换为ACR镜像地址
             echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
-            jq --arg img "$ACR_IMAGE" '.services.app.image = $img' compose.yaml > compose.tmp && mv compose.tmp compose.yaml
+            sed -i "s|image: ghcr.io/.*:latest|image: $ACR_IMAGE|g" compose.yaml
             
             # 4. 从阿里云ACR拉取最新镜像（国内速度更快）
             echo "📥 从阿里云ACR拉取最新镜像..."
