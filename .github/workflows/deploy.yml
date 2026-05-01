@@ -84,7 +84,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=sha,format=long,prefix=
 
       - name: 构建并推送镜像
         uses: docker/build-push-action@v5
@@ -100,3 +99,58 @@ jobs:
           echo "✅ 镜像构建完成并推送成功"
           echo "镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo "镜像SHA标签: ${{ steps.meta.outputs.tags }}"
+
+  deploy-to-server:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: 代码检出（获取compose.yaml）
+        uses: actions/checkout@v4
+
+      - name: 部署到服务器
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ALIYUN_SSH_HOST }}
+          username: ${{ secrets.ALIYUN_SSH_USER }}
+          key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+          port: 22
+          envs: GITHUB_TOKEN,REGISTRY,IMAGE_NAME,BWS_ACCESS_TOKEN,BWS_PROJECT_ID
+          script: |
+            echo "🚀 开始部署服务..."
+            
+            # 1. 登录到GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            
+            # 2. 创建工作目录
+            mkdir -p /opt/dannis-authing
+            cd /opt/dannis-authing
+            
+            # 3. 同步最新的compose.yaml
+            cat > compose.yaml << 'EOF'
+            $(cat compose.yaml)
+            EOF
+            
+            # 4. 拉取最新镜像
+            echo "📥 执行拉取镜像命令: podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            
+            # 5. 停止旧服务
+            podman-compose down || true
+            
+            # 6. 启动新服务
+            BWS_ACCESS_TOKEN=${{ secrets.BWS_ACCESS_TOKEN }} BWS_PROJECT_ID=${{ secrets.BWS_PROJECT_ID }} podman-compose up -d
+            
+            # 7. 等待服务启动
+            echo "⏳ 等待服务启动..."
+            sleep 15
+            
+            # 8. 验证服务健康状态
+            if podman-compose exec -T app curl -f http://localhost:3000/api/health; then
+              echo "✅ 服务部署成功！健康检查通过"
+              podman-compose ps
+            else
+              echo "❌ 服务部署失败，查看日志："
+              podman-compose logs app
+              exit 1
+            fi
