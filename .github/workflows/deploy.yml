@@ -119,7 +119,10 @@ jobs:
           port: 22
           envs: GITHUB_TOKEN,REGISTRY,IMAGE_NAME,BWS_ACCESS_TOKEN,BWS_PROJECT_ID
           script: |
+            set -e
             echo "🚀 开始部署服务..."
+            # 把用户local/bin加到PATH，找到podman-compose
+            export PATH=$PATH:~/.local/bin
             
             # 1. 登录到GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
