@@ -24,17 +24,27 @@ jobs:
 
       - name: 安装BWS CLI（可选，构建时需要拉取配置时启用）
         run: |
-          curl -fsSL https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu-0.5.0 -o /usr/local/bin/bws
+          # 修复404问题：正确的二进制文件名不带版本后缀
+          curl -fsSL https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu -o /usr/local/bin/bws
           chmod +x /usr/local/bin/bws
+          # 验证安装成功
+          bws --version
 
       - name: 拉取构建配置（可选）
         env:
           BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
           BWS_PROJECT_ID: ${{ secrets.BWS_PROJECT_ID }}
         run: |
+          # 打印secret长度排查配置问题（不泄露实际内容）
+          echo "BWS_ACCESS_TOKEN length: ${#BWS_ACCESS_TOKEN}"
+          echo "BWS_PROJECT_ID length: ${#BWS_PROJECT_ID}"
+          
           if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
+            echo "BWS配置存在，开始拉取构建配置..."
             bws secret get --project-id "$BWS_PROJECT_ID" --output-env > .env.production
-            echo "构建配置拉取完成"
+            echo "构建配置拉取完成，.env.production大小: $(du -h .env.production | cut -f1)"
+          else
+            echo "BWS配置未设置，跳过拉取构建配置步骤"
           fi
 
       - name: 登录到GitHub Container Registry
