@@ -147,10 +147,15 @@ jobs:
             # 3. 解码base64内容写入compose.yaml（避免YAML特殊字符问题）
             echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
             
-            # 4. 拉取最新镜像
-            echo "📥 执行拉取镜像命令: podman pull $FULL_IMAGE"
-            podman pull --quiet $FULL_IMAGE
-            echo "✅ 镜像拉取完成"
+            # 4. 使用加速源拉取最新镜像，保持原有仓库名
+            echo "📥 使用南大镜像加速拉取镜像..."
+            MIRROR_IMAGE=$(echo $FULL_IMAGE | sed "s|ghcr.io|ghcr.nju.edu.cn|g")
+            podman pull --quiet $MIRROR_IMAGE
+            # 打回原有标签
+            podman tag $MIRROR_IMAGE $FULL_IMAGE
+            # 删除加速源标签，images命令只显示原有仓库名
+            podman rmi $MIRROR_IMAGE > /dev/null
+            echo "✅ 镜像拉取完成，保持原有仓库名 $FULL_IMAGE"
             
             # 5. 停止旧服务
             podman-compose down || true
