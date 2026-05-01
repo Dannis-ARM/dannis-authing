@@ -1,5 +1,7 @@
 # dannis-authing 企业服务订阅平台
 
+[Github](https://github.com/Dannis-ARM?tab=repositories)
+
 专业级多等级订阅服务平台，采用对冲基金风格设计，支持微信扫码登录，提供三级订阅服务，为不同规模企业提供全方位的服务支持。
 
 ## ✨ 功能特性
