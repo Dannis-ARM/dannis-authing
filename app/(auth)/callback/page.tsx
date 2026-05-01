@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Authing } from '@authing/web';
 import { authingConfig } from '@/lib/auth/config';
 import axios from 'axios';
 
-export default function CallbackPage() {
+// 动态渲染，避免预渲染问题
+export const dynamic = 'force-dynamic';
+
+function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -20,24 +22,46 @@ export default function CallbackPage() {
           throw new Error('无效的回调参数');
         }
 
-        // 初始化 Authing 实例
-        const authing = new Authing({
-          appId: authingConfig.appId,
-          domain: authingConfig.domain,
-          redirectUri: authingConfig.redirectUri,
+        // 直接调用OIDC token接口换取access_token，避免SDK版本兼容问题
+        const tokenResponse = await fetch(`https://${authingConfig.domain}/oidc/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: authingConfig.appId,
+            client_secret: authingConfig.appSecret,
+            redirect_uri: authingConfig.redirectUri,
+            code: code,
+          }),
         });
 
-        // 使用 code 换取用户信息
-        const userInfo = await authing.getLoginState({ code });
-        if (!userInfo) {
+        if (!tokenResponse.ok) {
+          throw new Error('换取访问令牌失败');
+        }
+
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        // 调用userinfo接口获取用户信息
+        const userInfoResponse = await fetch(`https://${authingConfig.domain}/oidc/me`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!userInfoResponse.ok) {
           throw new Error('获取用户信息失败');
         }
+
+        const userInfo = await userInfoResponse.json();
 
         // 同步用户信息到后端
         await axios.post('/api/auth/login', {
           authingId: userInfo.sub,
-          openid: userInfo.openid,
-          nickname: userInfo.nickname,
+          openid: userInfo.sub,
+          nickname: userInfo.nickname || userInfo.name,
           avatar: userInfo.picture,
           email: userInfo.email,
           phone: userInfo.phone_number,
@@ -84,4 +108,19 @@ export default function CallbackPage() {
   }
 
   return null;
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-700 mx-auto mb-4"></div>
+          <p className="text-neutral-700">正在处理登录...</p>
+        </div>
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
+  );
 }

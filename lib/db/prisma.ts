@@ -33,6 +33,7 @@ export const userDb = {
   }) => {
     return prisma.user.create({
       data: userData,
+      include: { subscription: true },
     });
   },
 
@@ -47,6 +48,7 @@ export const userDb = {
     return prisma.user.update({
       where: { id },
       data,
+      include: { subscription: true },
     });
   },
 };
