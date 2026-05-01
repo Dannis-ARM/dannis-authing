@@ -24,7 +24,8 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 
 # 安装BWS CLI用于秘钥拉取，以及必要的依赖
-RUN apk add --no-cache curl bash unzip && \
+# 添加libc6-compat兼容glibc动态链接，解决bws在alpine下运行127错误
+RUN apk add --no-cache curl bash unzip libc6-compat && \
     BWS_VERSION="2.0.0" && \
     BWS_URL="https://github.com/bitwarden/sdk-sm/releases/download/bws-v${BWS_VERSION}/bws-x86_64-unknown-linux-gnu-${BWS_VERSION}.zip" && \
     curl -fSL "$BWS_URL" -o /tmp/bws.zip && \
