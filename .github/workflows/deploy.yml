@@ -10,6 +10,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # 提前启用Node.js 24，解决Node.js 20废弃警告
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -20,7 +22,7 @@ jobs:
 
     steps:
       - name: 代码检出
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 安装BWS CLI（可选，构建时需要拉取配置时启用）
         run: |
@@ -71,7 +73,7 @@ jobs:
           fi
 
       - name: 登录到GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -79,14 +81,14 @@ jobs:
 
       - name: 提取镜像元数据
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
 
       - name: 构建并推送镜像
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
@@ -106,10 +108,10 @@ jobs:
     environment: production
     steps:
       - name: 代码检出（获取compose.yaml）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 部署到服务器
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.ALIYUN_SSH_HOST }}
           username: ${{ secrets.ALIYUN_SSH_USER }}
@@ -123,8 +125,8 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
             
             # 2. 创建工作目录
-            mkdir -p /opt/dannis-authing
-            cd /opt/dannis-authing
+            mkdir -p ~/deployments/dannis-authing
+            cd ~/deployments/dannis-authing
             
             # 3. 同步最新的compose.yaml
             cat > compose.yaml << 'EOF'
