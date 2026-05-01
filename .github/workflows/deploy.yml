@@ -124,6 +124,11 @@ jobs:
             # 把用户local/bin加到PATH，找到podman-compose
             export PATH=$PATH:~/.local/bin
             
+            # 转镜像名称为全小写，符合Docker仓库规范
+            IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
+            echo "🔧 镜像地址标准化为: $FULL_IMAGE"
+            
             # 1. 登录到GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
             
@@ -131,14 +136,13 @@ jobs:
             mkdir -p ~/deployments/dannis-authing
             cd ~/deployments/dannis-authing
             
-            # 3. 同步最新的compose.yaml
-            cat > compose.yaml << 'EOF'
-            $(cat compose.yaml)
-            EOF
+            # 3. 同步最新的compose.yaml，替换镜像为小写地址
+            COMPOSE_CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g")
+            echo "$COMPOSE_CONTENT" > compose.yaml
             
             # 4. 拉取最新镜像
-            echo "📥 执行拉取镜像命令: podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            echo "📥 执行拉取镜像命令: podman pull $FULL_IMAGE"
+            podman pull $FULL_IMAGE
             
             # 5. 停止旧服务
             podman-compose down || true
