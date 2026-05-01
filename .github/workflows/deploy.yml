@@ -110,6 +110,14 @@ jobs:
       - name: 代码检出（获取compose.yaml）
         uses: actions/checkout@v5
 
+      - name: 预处理compose.yaml，替换镜像为小写地址（base64编码避免YAML解析问题）
+        id: compose_content
+        run: |
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
+          CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
+          echo "content=$CONTENT" >> $GITHUB_OUTPUT
+
       - name: 部署到服务器
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -133,16 +141,16 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
             
             # 2. 创建工作目录
-            mkdir -p ~/deployments/dannis-authing
-            cd ~/deployments/dannis-authing
+            mkdir -p ~/.activate/dannis-authing
+            cd ~/.activate/dannis-authing
             
-            # 3. 同步最新的compose.yaml，替换镜像为小写地址
-            COMPOSE_CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g")
-            echo "$COMPOSE_CONTENT" > compose.yaml
+            # 3. 解码base64内容写入compose.yaml（避免YAML特殊字符问题）
+            echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
             
             # 4. 拉取最新镜像
             echo "📥 执行拉取镜像命令: podman pull $FULL_IMAGE"
-            podman pull $FULL_IMAGE
+            podman pull --quiet $FULL_IMAGE
+            echo "✅ 镜像拉取完成"
             
             # 5. 停止旧服务
             podman-compose down || true
