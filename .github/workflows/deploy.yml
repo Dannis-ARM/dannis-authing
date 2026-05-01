@@ -1,0 +1,71 @@
+name: 构建并推送镜像到GitHub Container Registry
+
+on:
+  push:
+    branches:
+      - main
+      - cicd*
+  workflow_dispatch: # 支持手动触发构建
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 允许推送到GitHub Container Registry
+
+    steps:
+      - name: 代码检出
+        uses: actions/checkout@v4
+
+      - name: 安装BWS CLI（可选，构建时需要拉取配置时启用）
+        run: |
+          curl -fsSL https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu-0.5.0 -o /usr/local/bin/bws
+          chmod +x /usr/local/bin/bws
+
+      - name: 拉取构建配置（可选）
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+          BWS_PROJECT_ID: ${{ secrets.BWS_PROJECT_ID }}
+        run: |
+          if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
+            bws secret get --project-id "$BWS_PROJECT_ID" --output-env > .env.production
+            echo "构建配置拉取完成"
+          fi
+
+      - name: 登录到GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long,prefix=
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 输出镜像信息
+        run: |
+          echo "✅ 镜像构建完成并推送成功"
+          echo "镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "镜像SHA标签: ${{ steps.meta.outputs.tags }}"
