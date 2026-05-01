@@ -29,8 +29,8 @@ FROM node:20-alpine AS runner
 # 设置 BWS 版本
 ARG BWS_VERSION="2.0.0"
 
-# 安装最小依赖（移除无用包）
-RUN apk add --no-cache curl bash unzip
+# 安装最小依赖（添加openssl1.1兼容库解决Prisma依赖问题）
+RUN apk add --no-cache curl bash unzip openssl1.1-compat
 
 # 自动识别架构并安装 BWS（musl 专为 Alpine 优化）
 RUN set -ex; \

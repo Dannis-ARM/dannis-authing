@@ -96,78 +96,117 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: 输出镜像信息
+      - name: 输出GitHub镜像信息
         run: |
-          echo "✅ 镜像构建完成并推送成功"
-          echo "镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "✅ 镜像构建完成并推送至GitHub Container Registry成功"
+          echo "GitHub镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo "镜像SHA标签: ${{ steps.meta.outputs.tags }}"
 
-  deploy-to-server:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: 代码检出（获取compose.yaml）
-        uses: actions/checkout@v5
-
-      - name: 预处理compose.yaml，替换镜像为小写地址（base64编码避免YAML解析问题）
-        id: compose_content
+      - name: 推送镜像到阿里云ACR
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+          BWS_PROJECT_ID: ${{ secrets.BWS_PROJECT_ID }}
         run: |
-          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-          FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
-          CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
-          echo "content=$CONTENT" >> $GITHUB_OUTPUT
+          set -e
+          # 从BWS拉取阿里云ACR密钥和配置
+          eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
+          
+          # 检查配置是否完整
+          if [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
+            echo "❌ 阿里云ACR配置不完整，请检查BWS中的ALIYUN_ACR_OPS_ACCESS_KEY_ID、ALIYUN_ACR_OPS_ACCESS_KEY_SECRET、ALIYUN_ACR_REGISTRY配置项"
+            exit 1
+          fi
+          
+          # 登录阿里云ACR
+          echo "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" | docker login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_OPS_ACCESS_KEY_ID --password-stdin
+          
+          # 构建阿里云ACR镜像地址（自动转全小写，仓库名和GitHub保持一致）
+          ACR_IMAGE=$(echo "${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest" | tr '[:upper:]' '[:lower:]')
+          
+          # 给镜像打阿里云标签
+          docker tag ${{ steps.meta.outputs.tags }} $ACR_IMAGE
+          
+          # 推送镜像到阿里云ACR
+          echo "📤 推送镜像到阿里云ACR: $ACR_IMAGE"
+          docker push $ACR_IMAGE
+          
+          echo "✅ 镜像推送至阿里云ACR成功！阿里云镜像地址: $ACR_IMAGE"
 
-      - name: 部署到服务器
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.ALIYUN_SSH_HOST }}
-          username: ${{ secrets.ALIYUN_SSH_USER }}
-          key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
-          port: 22
-          envs: GITHUB_TOKEN,REGISTRY,IMAGE_NAME,BWS_ACCESS_TOKEN,BWS_PROJECT_ID
-          script: |
-            set -e
-            echo "🚀 开始部署服务..."
-            # 把用户local/bin加到PATH，找到podman-compose
-            export PATH=$PATH:~/.local/bin
+  # deploy-to-server:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   steps:
+  #     - name: 代码检出（获取compose.yaml）
+  #       uses: actions/checkout@v5
+
+  #     - name: 预处理compose.yaml，替换镜像为小写地址（base64编码避免YAML解析问题）
+  #       id: compose_content
+  #       run: |
+  #         IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+  #         FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
+  #         CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
+  #         echo "content=$CONTENT" >> $GITHUB_OUTPUT
+
+  #     - name: 部署到服务器
+  #       uses: appleboy/ssh-action@v1.2.0
+  #       with:
+  #         host: ${{ secrets.ALIYUN_SSH_HOST }}
+  #         username: ${{ secrets.ALIYUN_SSH_USER }}
+  #         key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+  #         port: 22
+  #         envs: GITHUB_TOKEN,REGISTRY,IMAGE_NAME,BWS_ACCESS_TOKEN,BWS_PROJECT_ID
+  #         script: |
+  #           set -e
+  #           echo "🚀 开始部署服务..."
+  #           # 把用户local/bin加到PATH，找到podman-compose
+  #           export PATH=$PATH:~/.local/bin
             
-            # 转镜像名称为全小写，符合Docker仓库规范
-            IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-            FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
-            echo "🔧 镜像地址标准化为: $FULL_IMAGE"
+  #           # 从BWS拉取阿里云ACR配置
+  #           eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
             
-            # 1. 登录到GitHub Container Registry，支持私有仓库拉取
-            echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+  #           # 检查ACR配置是否完整
+  #           if [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
+  #             echo "❌ 阿里云ACR配置不完整，无法从ACR拉取镜像"
+  #             exit 1
+  #           fi
             
-            # 2. 创建工作目录
-            mkdir -p ~/.activate/dannis-authing
-            cd ~/.activate/dannis-authing
+  #           # 构建ACR镜像地址（全小写，仓库名和GitHub保持一致）
+  #           ACR_IMAGE=$(echo "${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest" | tr '[:upper:]' '[:lower:]')
+  #           echo "🔧 使用阿里云ACR镜像地址: $ACR_IMAGE"
             
-            # 3. 解码base64内容写入compose.yaml（避免YAML特殊字符问题）
-            echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
+  #           # 1. 登录阿里云ACR
+  #           echo "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" | podman login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_OPS_ACCESS_KEY_ID --password-stdin
             
-            # 4. 直接从官方源拉取最新镜像，支持私有仓库
-            echo "📥 拉取最新镜像..."
-            podman pull $FULL_IMAGE
-            echo "✅ 镜像拉取完成"
+  #           # 2. 创建工作目录
+  #           mkdir -p ~/.activate/dannis-authing
+  #           cd ~/.activate/dannis-authing
             
-            # 5. 停止旧服务
-            podman-compose down || true
+  #           # 3. 解码base64内容写入compose.yaml并替换为ACR镜像地址
+  #           echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
+  #           sed -i "s|image: ghcr.io/.*:latest|image: $ACR_IMAGE|g" compose.yaml
             
-            # 6. 启动新服务
-            BWS_ACCESS_TOKEN=${{ secrets.BWS_ACCESS_TOKEN }} BWS_PROJECT_ID=${{ secrets.BWS_PROJECT_ID }} podman-compose up -d
+  #           # 4. 从阿里云ACR拉取最新镜像（国内速度更快）
+  #           echo "📥 从阿里云ACR拉取最新镜像..."
+  #           podman pull $ACR_IMAGE
+  #           echo "✅ 镜像拉取完成"
             
-            # 7. 等待服务启动
-            echo "⏳ 等待服务启动..."
-            sleep 15
+  #           # 5. 停止旧服务
+  #           podman-compose down || true
             
-            # 8. 验证服务健康状态
-            if podman-compose exec -T app curl -f http://localhost:3000/api/health; then
-              echo "✅ 服务部署成功！健康检查通过"
-              podman-compose ps
-            else
-              echo "❌ 服务部署失败，查看日志："
-              podman-compose logs app
-              exit 1
-            fi
+  #           # 6. 启动新服务
+  #           BWS_ACCESS_TOKEN=${{ secrets.BWS_ACCESS_TOKEN }} BWS_PROJECT_ID=${{ secrets.BWS_PROJECT_ID }} podman-compose up -d
+            
+  #           # 7. 等待服务启动
+  #           echo "⏳ 等待服务启动..."
+  #           sleep 15
+            
+  #           # 8. 验证服务健康状态
+  #           if podman-compose exec -T app curl -f http://localhost:3000/api/health; then
+  #             echo "✅ 服务部署成功！健康检查通过"
+  #             podman-compose ps
+  #           else
+  #             echo "❌ 服务部署失败，查看日志："
+  #             podman-compose logs app
+  #             exit 1
+  #           fi
