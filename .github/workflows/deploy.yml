@@ -102,6 +102,17 @@ jobs:
           echo "GitHub镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo "镜像SHA标签: ${{ steps.meta.outputs.tags }}"
 
+      - name: 安装阿里云CLI
+        run: |
+          if ! command -v aliyun &> /dev/null; then
+            echo "📥 安装阿里云CLI..."
+            curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz -o /tmp/aliyuncli.tgz
+            tar zxf /tmp/aliyuncli.tgz -C /tmp
+            sudo mv /tmp/aliyun /usr/local/bin/
+            rm -f /tmp/aliyuncli.tgz
+            aliyun version
+          fi
+
       - name: 推送镜像到阿里云ACR
         env:
           BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
@@ -109,16 +120,28 @@ jobs:
         run: |
           set -e
           # 从BWS拉取阿里云ACR密钥和配置
-          eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
+          eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_|ALIBABA_CLOUD_')"
           
           # 检查配置是否完整
-          if [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
-            echo "❌ 阿里云ACR配置不完整，请检查BWS中的ALIYUN_ACR_OPS_ACCESS_KEY_ID、ALIYUN_ACR_OPS_ACCESS_KEY_SECRET、ALIYUN_ACR_REGISTRY配置项"
+          if [ -z "$ALIBABA_CLOUD_ACCESS_KEY_ID" ] || [ -z "$ALIBABA_CLOUD_ACCESS_KEY_SECRET" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
+            echo "❌ 阿里云ACR配置不完整，请检查BWS中的ALIBABA_CLOUD_ACCESS_KEY_ID、ALIBABA_CLOUD_ACCESS_KEY_SECRET、ALIYUN_ACR_REGISTRY配置项"
             exit 1
           fi
           
+          # Region默认使用杭州
+          if [ -z "$ALIBABA_CLOUD_REGION_ID" ]; then
+            export ALIBABA_CLOUD_REGION_ID="cn-hangzhou"
+            echo "ℹ️ 未配置ALIBABA_CLOUD_REGION_ID，默认使用杭州地域: $ALIBABA_CLOUD_REGION_ID"
+          fi
+          
+          # 获取ACR临时登录凭证
+          echo "🔑 获取ACR临时登录凭证..."
+          AUTH_RESPONSE=$(aliyun cr GetAuthorizationToken --region "$ALIYUN_REGION" --output json)
+          TEMP_USER=$(echo "$AUTH_RESPONSE" | jq -r '.Data.TempUserName')
+          TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.Data.AuthorizationToken')
+          
           # 登录阿里云ACR
-          echo "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" | docker login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_OPS_ACCESS_KEY_ID --password-stdin
+          echo "$TOKEN" | docker login "$ALIYUN_ACR_REGISTRY" -u "$TEMP_USER" --password-stdin
           
           # 构建阿里云ACR镜像地址（自动转全小写，仓库名和GitHub保持一致）
           ACR_IMAGE=$(echo "${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest" | tr '[:upper:]' '[:lower:]')
