@@ -11,7 +11,7 @@ const tierPathMap: Record<string, string[]> = {
   PREMIUM: ['/dashboard/free', '/dashboard/standard', '/dashboard/premium'],
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 公共路径直接放行

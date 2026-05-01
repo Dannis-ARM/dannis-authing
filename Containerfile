@@ -8,8 +8,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # 设置工作目录
 WORKDIR /app
 
-# 让Prisma生成适配OpenSSL 3的客户端，不需要依赖系统旧版OpenSSL
-ENV PRISMA_OPENSSL_VERSION=3
+# Prisma 7.x使用纯JS引擎，不需要Rust引擎和OpenSSL依赖
 
 # 复制依赖文件（利用缓存）
 COPY package.json pnpm-lock.yaml ./

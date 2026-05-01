@@ -171,8 +171,8 @@ jobs:
   #           eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
             
   #           # 检查ACR配置是否完整
-  #           if [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_ID" ] || [ -z "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
-  #             echo "❌ 阿里云ACR配置不完整，无法从ACR拉取镜像"
+  #           if [ -z "$ALIYUN_ACR_USER" ] || [ -z "$ALIYUN_ACR_PASSWORD" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
+  #             echo "❌ 阿里云ACR配置不完整，请检查BWS中的ALIYUN_ACR_USER、ALIYUN_ACR_PASSWORD、ALIYUN_ACR_REGISTRY配置项"
   #             exit 1
   #           fi
             
@@ -181,7 +181,7 @@ jobs:
   #           echo "🔧 使用阿里云ACR镜像地址: $ACR_IMAGE"
             
   #           # 1. 登录阿里云ACR
-  #           echo "$ALIYUN_ACR_OPS_ACCESS_KEY_SECRET" | podman login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_OPS_ACCESS_KEY_ID --password-stdin
+  #           echo "$ALIYUN_ACR_PASSWORD" | podman login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_USER --password-stdin
             
   #           # 2. 创建工作目录
   #           mkdir -p ~/.activate/dannis-authing
