@@ -24,9 +24,23 @@ jobs:
 
       - name: 安装BWS CLI（可选，构建时需要拉取配置时启用）
         run: |
-          # 修复404问题：正确的二进制文件名不带版本后缀
-          curl -fsSL https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu -o /usr/local/bin/bws
+          # 安装bws v2.0.0 正确方式
+          apt update && apt install -y unzip
+          BWS_VERSION="2.0.0"
+          BWS_URL="https://github.com/bitwarden/sdk-sm/releases/download/bws-v${BWS_VERSION}/bws-x86_64-unknown-linux-gnu-${BWS_VERSION}.zip"
+          TMP_ZIP="/tmp/bws-${BWS_VERSION}.zip"
+          
+          echo "📥 Downloading bws v${BWS_VERSION}..."
+          curl -fSL "$BWS_URL" -o "$TMP_ZIP"
+          
+          echo "📤 Extracting bws executable..."
+          unzip -o "$TMP_ZIP" -d /tmp
+          mv -f "/tmp/bws" /usr/local/bin/
           chmod +x /usr/local/bin/bws
+          
+          # 清理临时文件
+          rm -f "$TMP_ZIP"
+          
           # 验证安装成功
           bws --version
 

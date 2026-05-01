@@ -24,9 +24,16 @@ RUN pnpm build
 FROM node:20-alpine AS runner
 
 # 安装BWS CLI用于秘钥拉取，以及必要的依赖
-RUN apk add --no-cache curl bash && \
-    curl -fsSL https://github.com/bitwarden/sdk/releases/download/bws-v0.5.0/bws-x86_64-unknown-linux-gnu-0.5.0 -o /usr/local/bin/bws && \
-    chmod +x /usr/local/bin/bws
+RUN apk add --no-cache curl bash unzip && \
+    BWS_VERSION="2.0.0" && \
+    BWS_URL="https://github.com/bitwarden/sdk-sm/releases/download/bws-v${BWS_VERSION}/bws-x86_64-unknown-linux-gnu-${BWS_VERSION}.zip" && \
+    curl -fSL "$BWS_URL" -o /tmp/bws.zip && \
+    unzip -o /tmp/bws.zip -d /tmp && \
+    mv -f /tmp/bws /usr/local/bin/ && \
+    chmod +x /usr/local/bin/bws && \
+    rm -f /tmp/bws.zip && \
+    # 验证安装
+    bws --version
 
 # 设置工作目录
 WORKDIR /app
