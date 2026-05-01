@@ -137,23 +137,20 @@ jobs:
             FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
             echo "🔧 镜像地址标准化为: $FULL_IMAGE"
             
-            # 1. 创建工作目录
+            # 1. 登录到GitHub Container Registry，支持私有仓库拉取
+            echo "${{ secrets.GITHUB_TOKEN }}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            
+            # 2. 创建工作目录
             mkdir -p ~/.activate/dannis-authing
             cd ~/.activate/dannis-authing
             
             # 3. 解码base64内容写入compose.yaml（避免YAML特殊字符问题）
             echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
             
-            # 4. 使用加速源拉取最新镜像，保持原有仓库名
-            echo "📥 使用南大镜像加速拉取镜像..."
-            MIRROR_IMAGE=$(echo $FULL_IMAGE | sed "s|ghcr.io|ghcr.nju.edu.cn|g")
-            # ghcr.nju.edu.cn是公开镜像缓存，不需要登录，直接拉取公开镜像
-            podman pull $MIRROR_IMAGE
-            # 打回原有标签
-            podman tag $MIRROR_IMAGE $FULL_IMAGE
-            # 删除加速源标签，images命令只显示原有仓库名
-            podman rmi $MIRROR_IMAGE > /dev/null
-            echo "✅ 镜像拉取完成，保持原有仓库名 $FULL_IMAGE"
+            # 4. 直接从官方源拉取最新镜像，支持私有仓库
+            echo "📥 拉取最新镜像..."
+            podman pull $FULL_IMAGE
+            echo "✅ 镜像拉取完成"
             
             # 5. 停止旧服务
             podman-compose down || true

@@ -80,8 +80,10 @@ echo "=== 启动应用初始化 ==="
 # 如果配置了 BWS，则自动拉取密钥
 if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
   echo "正在从 Bitwarden BWS 拉取环境变量..."
-  bws secret list -o env "$BWS_PROJECT_ID" > .env
-  echo "环境变量拉取完成：$(wc -l < .env) 个配置项"
+  # 直接导出环境变量到当前会话，不需要写入文件，彻底避免权限问题
+  ENV_CONTENT=$(bws secret list -o env "$BWS_PROJECT_ID")
+  eval "$ENV_CONTENT"
+  echo "环境变量拉取完成：$(echo "$ENV_CONTENT" | wc -l) 个配置项"
 else
   echo "未检测到 BWS 配置，使用本地环境变量"
 fi

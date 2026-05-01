@@ -7,7 +7,7 @@ services:
     # 本地开发测试时，注释上面的image行，放开下面的build行
     # build: .
     container_name: dannis-authing
-    restart: always
+    # restart: always
     ports:
       # 只监听本地回环地址，外网只能通过Caddy访问，更安全
       - "127.0.0.1:3000:3000"
