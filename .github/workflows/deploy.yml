@@ -1,0 +1,232 @@
+name: 构建并推送镜像到GitHub Container Registry
+
+on:
+  push:
+    branches:
+      - main
+      - cicd*
+  workflow_dispatch: # 支持手动触发构建
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # 提前启用Node.js 24，解决Node.js 20废弃警告
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 允许推送到GitHub Container Registry
+
+    steps:
+      - name: Setup lowercase image name
+        run: |
+          # 使用bash内置转小写功能，写入全局环境变量
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> $GITHUB_ENV
+          echo "Using lowercase image name: ${IMAGE_NAME,,}"
+
+      - name: 代码检出
+        uses: actions/checkout@v5
+
+      - name: 安装BWS CLI（可选，构建时需要拉取配置时启用）
+        run: |
+          # 安装bws v2.0.0 正确方式
+          apt update && apt install -y unzip
+          BWS_VERSION="2.0.0"
+          BWS_URL="https://github.com/bitwarden/sdk-sm/releases/download/bws-v${BWS_VERSION}/bws-x86_64-unknown-linux-gnu-${BWS_VERSION}.zip"
+          TMP_ZIP="/tmp/bws-${BWS_VERSION}.zip"
+          
+          echo "📥 Downloading bws v${BWS_VERSION}..."
+          curl -fSL "$BWS_URL" -o "$TMP_ZIP"
+          
+          echo "📤 Extracting bws executable..."
+          unzip -o "$TMP_ZIP" -d /tmp
+          mv -f "/tmp/bws" /usr/local/bin/
+          chmod +x /usr/local/bin/bws
+          
+          # 清理临时文件
+          rm -f "$TMP_ZIP"
+          
+          # 验证安装成功
+          bws --version
+
+      - name: 拉取构建配置（可选）
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+          BWS_PROJECT_ID: ${{ secrets.BWS_PROJECT_ID }}
+        run: |
+          # 打印secret长度排查配置问题（不泄露实际内容）
+          echo "BWS_ACCESS_TOKEN length: ${#BWS_ACCESS_TOKEN}"
+          echo "BWS_PROJECT_ID length: ${#BWS_PROJECT_ID}"
+
+          if ! [[ "$BWS_PROJECT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "❌ BWS_PROJECT_ID格式错误，不是有效的UUID"
+            echo "请检查Bitwarden控制台中的项目ID是否正确复制"
+            exit 1
+          fi
+                    
+          if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
+            echo "BWS配置存在，开始拉取构建配置..."
+            # 正确用法：直接输出env格式，project_id作为参数传入
+            bws secret list -o env "$BWS_PROJECT_ID" > .env.production
+            echo "构建配置拉取完成，.env.production大小: $(du -h .env.production | cut -f1)"
+            echo "已拉取的配置项："
+            cat .env.production | cut -d'=' -f1
+          else
+            echo "BWS配置未设置，跳过拉取构建配置步骤"
+          fi
+
+      - name: 登录到GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取镜像元数据
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: 输出GitHub镜像信息
+        run: |
+          echo "✅ 镜像构建完成并推送至GitHub Container Registry成功"
+          echo "GitHub镜像地址: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "镜像SHA标签: ${{ steps.meta.outputs.tags }}"
+
+      - name: 安装阿里云CLI
+        run: |
+          if ! command -v aliyun &> /dev/null; then
+            echo "📥 安装阿里云CLI..."
+            curl -fsSL https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz -o /tmp/aliyuncli.tgz
+            tar zxf /tmp/aliyuncli.tgz -C /tmp
+            sudo mv /tmp/aliyun /usr/local/bin/
+            rm -f /tmp/aliyuncli.tgz
+            aliyun version
+          fi
+
+      - name: 推送镜像到阿里云ACR
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+          BWS_PROJECT_ID: ${{ secrets.BWS_PROJECT_ID }}
+        run: |
+          set -e
+          # 从BWS拉取阿里云ACR密钥和配置
+          eval "$(bws secret list -o env "$BWS_PROJECT_ID" | grep -E 'ALIYUN_ACR_')"
+          
+          # 登录阿里云ACR
+          echo "$ALIYUN_ACR_PASSWORD" | docker login "$ALIYUN_ACR_REGISTRY" -u "$ALIYUN_ACR_USER" --password-stdin
+          
+          # 全局IMAGE_NAME已经是全小写，直接使用即可
+          ACR_IMAGE="${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest"
+          
+          # 给镜像打阿里云标签
+          docker tag ${{ steps.meta.outputs.tags }} $ACR_IMAGE
+          
+          # 推送镜像到阿里云ACR
+          echo "📤 推送镜像到阿里云ACR: $ACR_IMAGE"
+          docker push $ACR_IMAGE
+          
+          echo "✅ 镜像推送至阿里云ACR成功！阿里云镜像地址: $ACR_IMAGE"
+
+  deploy-to-server:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Setup lowercase image name
+        run: |
+          # 使用bash内置转小写功能，写入全局环境变量
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> $GITHUB_ENV
+          echo "Using lowercase image name: ${IMAGE_NAME,,}"
+
+      - name: 代码检出（获取compose.yaml）
+        uses: actions/checkout@v5
+
+      - name: 预处理compose.yaml，替换镜像地址（base64编码避免YAML解析问题）
+        id: compose_content
+        run: |
+          # 全局IMAGE_NAME已经是全小写，直接使用
+          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
+          echo "content=$CONTENT" >> $GITHUB_OUTPUT
+
+      - name: 部署到服务器
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
+        with:
+          host: ${{ secrets.ALIYUN_SSH_HOST }}
+          username: ${{ secrets.ALIYUN_SSH_USER }}
+          key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+          port: 22
+          # 传递环境变量到SSH会话
+          envs: BWS_ACCESS_TOKEN
+          script: |
+            set -e
+            echo "🚀 开始部署服务..."
+            # 把用户local/bin加到PATH，找到podman-compose
+            export PATH=$PATH:~/.local/bin
+            
+            # 从BWS拉取阿里云ACR配置
+            eval "$(bws secret list -o env "${{ secrets.BWS_PROJECT_ID }}" | grep -E 'ALIYUN_ACR_')"
+            
+            # 检查ACR配置是否完整
+            if [ -z "$ALIYUN_ACR_USER" ] || [ -z "$ALIYUN_ACR_PASSWORD" ] || [ -z "$ALIYUN_ACR_REGISTRY" ]; then
+              echo "❌ 阿里云ACR配置不完整，请检查BWS中的ALIYUN_ACR_USER、ALIYUN_ACR_PASSWORD、ALIYUN_ACR_REGISTRY配置项"
+              exit 1
+            fi
+            
+            # 全局IMAGE_NAME已经是全小写，直接使用
+            ACR_IMAGE="${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest"
+            echo "🔧 使用阿里云ACR镜像地址: $ACR_IMAGE"
+            
+            # 1. 登录阿里云ACR
+            echo "$ALIYUN_ACR_PASSWORD" | podman login $ALIYUN_ACR_REGISTRY -u $ALIYUN_ACR_USER --password-stdin
+            
+            # 2. 创建工作目录
+            mkdir -p ~/.activate/dannis-authing
+            cd ~/.activate/dannis-authing
+            
+            # 3. 解码base64内容写入compose.yaml，然后替换为ACR镜像地址
+            echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
+            sed -i "s|image: ghcr.io/.*:latest|image: $ACR_IMAGE|g" compose.yaml
+            
+            # 4. 从阿里云ACR拉取最新镜像（国内速度更快）
+            echo "📥 从阿里云ACR拉取最新镜像..."
+            podman pull $ACR_IMAGE
+            echo "✅ 镜像拉取完成"
+            
+            # 5. 停止旧服务
+            podman-compose down || true
+            
+            # 6. 启动新服务
+            BWS_ACCESS_TOKEN=${{ secrets.BWS_ACCESS_TOKEN }} BWS_PROJECT_ID=${{ secrets.BWS_PROJECT_ID }} podman-compose up -d
+            
+            # 7. 等待服务启动
+            echo "⏳ 等待服务启动..."
+            sleep 10
+            
+            # 8. 验证服务健康状态
+            if curl -f http://localhost:3000/api/health; then
+              echo "✅ 服务部署成功！健康检查通过"
+              podman-compose ps
+            else
+              echo "❌ 服务部署失败，查看日志："
+              podman-compose logs app
+              exit 1
+            fi

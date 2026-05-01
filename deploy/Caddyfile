@@ -1,0 +1,44 @@
+# 替换为你的实际域名
+ecs-mini.aliyun.gilded-age.cn {
+  # 日志配置
+  log {
+    output file /var/log/caddy/access.log
+    level INFO
+  }
+
+  # 安全响应头
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options DENY
+    X-XSS-Protection "1; mode=block"
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Permissions-Policy "geolocation=(), camera=(), microphone=()"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+
+  # 反向代理到Podman启动的Next.js服务
+  reverse_proxy localhost:3000 {
+    # 传递真实IP给后端
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+    header_up Host {host}
+
+    # 超时配置
+    transport http {
+      dial_timeout 30s
+      response_header_timeout 30s
+    }
+
+    # 健康检查
+    health_interval 5s
+    health_timeout 2s
+    health_status 200
+  }
+
+  # 静态资源缓存优化
+  @static {
+    path *.css *.js *.png *.jpg *.svg *.ico *.woff *.woff2
+  }
+  header @static Cache-Control "public, max-age=31536000, immutable"
+}
