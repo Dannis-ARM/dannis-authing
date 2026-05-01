@@ -136,7 +136,7 @@ jobs:
           
           # 获取ACR临时登录凭证
           echo "🔑 获取ACR临时登录凭证..."
-          AUTH_RESPONSE=$(aliyun cr GetAuthorizationToken --region "$ALIYUN_REGION" --output json)
+          AUTH_RESPONSE=$(aliyun cr GetAuthorizationToken --region "$ALIBABA_CLOUD_REGION_ID" --output json)
           TEMP_USER=$(echo "$AUTH_RESPONSE" | jq -r '.Data.TempUserName')
           TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.Data.AuthorizationToken')
           
