@@ -52,7 +52,13 @@ jobs:
           # 打印secret长度排查配置问题（不泄露实际内容）
           echo "BWS_ACCESS_TOKEN length: ${#BWS_ACCESS_TOKEN}"
           echo "BWS_PROJECT_ID length: ${#BWS_PROJECT_ID}"
-          
+
+          if ! [[ "$BWS_PROJECT_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "❌ BWS_PROJECT_ID格式错误，不是有效的UUID"
+            echo "请检查Bitwarden控制台中的项目ID是否正确复制"
+            exit 1
+          fi
+                    
           if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
             echo "BWS配置存在，开始拉取构建配置..."
             # 正确用法：直接输出env格式，project_id作为参数传入
