@@ -29,8 +29,8 @@ RUN pnpm build
 # 阶段2：运行阶段（最小化依赖 + 安全加固，使用Node 24 LTS，最小化root使用）
 FROM node:24-alpine AS runner
 
-# 设置 BWS 版本
-ARG BWS_VERSION="2.0"
+# 设置 BWS 版本（完整版本号，匹配GitHub release标签）
+ARG BWS_VERSION="2.0.0"
 
 # ========== 仅此处使用root操作（系统级必要操作） ==========
 # 安装最小依赖，不需要旧版OpenSSL兼容包，Node 24自带OpenSSL 3，Prisma已适配
