@@ -91,7 +91,7 @@ exec node server.js
 EOF
 
 RUN chmod +x /app/start.sh && \
-    chown nextjs:nodejs /app/start.sh
+    chown -R nextjs:nodejs /app
 
 # 健康检查（轻量）
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
