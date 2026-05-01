@@ -55,8 +55,11 @@ jobs:
           
           if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then
             echo "BWS配置存在，开始拉取构建配置..."
-            bws secret get --project-id "$BWS_PROJECT_ID" --output-env > .env.production
+            # 正确用法：直接输出env格式，project_id作为参数传入
+            bws secret list -o env "$BWS_PROJECT_ID" > .env.production
             echo "构建配置拉取完成，.env.production大小: $(du -h .env.production | cut -f1)"
+            echo "已拉取的配置项："
+            cat .env.production | cut -d'=' -f1
           else
             echo "BWS配置未设置，跳过拉取构建配置步骤"
           fi

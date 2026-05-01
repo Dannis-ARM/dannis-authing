@@ -54,8 +54,9 @@ EXPOSE 3000
 RUN echo '#!/bin/bash' > /app/start.sh && \
     echo 'if [ -n "$BWS_ACCESS_TOKEN" ] && [ -n "$BWS_PROJECT_ID" ]; then' >> /app/start.sh && \
     echo '  echo "正在从BWS拉取环境变量..."' >> /app/start.sh && \
-    echo '  bws secret get --project-id "$BWS_PROJECT_ID" --output-env > .env' >> /app/start.sh && \
-    echo '  echo "环境变量拉取完成"' >> /app/start.sh && \
+    echo '  # 正确用法：直接输出env格式，project_id作为参数传入' >> /app/start.sh && \
+    echo '  bws secret list -o env "$BWS_PROJECT_ID" > .env' >> /app/start.sh && \
+    echo '  echo "环境变量拉取完成，共$(wc -l < .env)个配置项"' >> /app/start.sh && \
     echo 'fi' >> /app/start.sh && \
     echo 'node server.js' >> /app/start.sh && \
     chmod +x /app/start.sh
