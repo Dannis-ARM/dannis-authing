@@ -21,6 +21,12 @@ jobs:
       packages: write # 允许推送到GitHub Container Registry
 
     steps:
+      - name: Setup lowercase image name
+        run: |
+          # 使用bash内置转小写功能，写入全局环境变量
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> $GITHUB_ENV
+          echo "Using lowercase image name: ${IMAGE_NAME,,}"
+
       - name: 代码检出
         uses: actions/checkout@v5
 
@@ -125,8 +131,8 @@ jobs:
           # 登录阿里云ACR
           echo "$ALIYUN_ACR_PASSWORD" | docker login "$ALIYUN_ACR_REGISTRY" -u "$ALIYUN_ACR_USER" --password-stdin
           
-          # 构建阿里云ACR镜像地址（自动转全小写，仓库名和GitHub保持一致）
-          ACR_IMAGE=$(echo "${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest" | tr '[:upper:]' '[:lower:]')
+          # 全局IMAGE_NAME已经是全小写，直接使用即可
+          ACR_IMAGE="${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest"
           
           # 给镜像打阿里云标签
           docker tag ${{ steps.meta.outputs.tags }} $ACR_IMAGE
@@ -142,26 +148,34 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Setup lowercase image name
+        run: |
+          # 使用bash内置转小写功能，写入全局环境变量
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> $GITHUB_ENV
+          echo "Using lowercase image name: ${IMAGE_NAME,,}"
+
       - name: 代码检出（获取compose.yaml）
         uses: actions/checkout@v5
 
-      - name: 预处理compose.yaml，替换镜像为小写地址（base64编码避免YAML解析问题）
+      - name: 预处理compose.yaml，替换镜像地址（base64编码避免YAML解析问题）
         id: compose_content
         run: |
-          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-          FULL_IMAGE="${{ env.REGISTRY }}/$IMAGE_NAME_LOWER:latest"
+          # 全局IMAGE_NAME已经是全小写，直接使用
+          FULL_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
           echo "content=$CONTENT" >> $GITHUB_OUTPUT
 
       - name: 部署到服务器
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          BWS_ACCESS_TOKEN: ${{ secrets.BWS_ACCESS_TOKEN }}
         with:
           host: ${{ secrets.ALIYUN_SSH_HOST }}
           username: ${{ secrets.ALIYUN_SSH_USER }}
           key: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
           port: 22
-          # 仅传递必要的环境变量，敏感变量直接通过表达式注入更安全
-          envs: IMAGE_NAME
+          # 传递环境变量到SSH会话
+          envs: BWS_ACCESS_TOKEN
           script: |
             set -e
             echo "🚀 开始部署服务..."
@@ -177,8 +191,8 @@ jobs:
               exit 1
             fi
             
-            # 构建ACR镜像地址（全小写，仓库名和GitHub保持一致）
-            ACR_IMAGE=$(echo "${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest" | tr '[:upper:]' '[:lower:]')
+            # 全局IMAGE_NAME已经是全小写，直接使用
+            ACR_IMAGE="${ALIYUN_ACR_REGISTRY}/${{ env.IMAGE_NAME }}:latest"
             echo "🔧 使用阿里云ACR镜像地址: $ACR_IMAGE"
             
             # 1. 登录阿里云ACR
