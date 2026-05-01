@@ -67,13 +67,10 @@ ENV PORT=3000
 # 禁止 Next.js 收集遥测
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# 切换非 root 用户
-USER nextjs
-
 # 暴露端口
 EXPOSE 3000
 
-# 启动脚本：BWS 拉取环境变量 + 启动应用
+# 启动脚本：BWS 拉取环境变量 + 启动应用（root用户创建，有权限）
 RUN cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -eo pipefail
@@ -93,11 +90,15 @@ echo "启动 Next.js 服务..."
 exec node server.js
 EOF
 
-RUN chmod +x /app/start.sh
+RUN chmod +x /app/start.sh && \
+    chown nextjs:nodejs /app/start.sh
 
 # 健康检查（轻量）
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:3000/api/health || exit 1
+
+# 切换非 root 用户（最后切换，保证前面的文件操作都有权限）
+USER nextjs
 
 # 启动命令
 CMD ["/app/start.sh"]
