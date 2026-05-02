@@ -18,6 +18,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "dannis-authing - 企业服务订阅平台",
   description: "专业级多等级订阅服务平台，支持微信扫码登录，对冲基金风格设计",
+  icons: {
+    icon: "/logos/logo-2d_28.png",
+  },
 };
 
 export default function RootLayout({
