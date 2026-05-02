@@ -1,8 +1,12 @@
 # 替换为你的实际域名
 ecs-mini.aliyun.gilded-age.cn {
-  # 日志配置
+  # 日志配置，滚动切割避免占满磁盘
   log {
-    output file /var/log/caddy/access.log
+    output file /var/log/caddy/access.log {
+      roll_size 100mb
+      roll_keep 3
+      roll_keep_for 7d
+    }
     level INFO
   }
 
@@ -16,8 +20,8 @@ ecs-mini.aliyun.gilded-age.cn {
     Referrer-Policy "strict-origin-when-cross-origin"
   }
 
-  # 反向代理到Podman启动的Next.js服务
-  reverse_proxy localhost:3000 {
+  # 反向代理到同网络下的app服务
+  reverse_proxy app:3000 {
     # 传递真实IP给后端
     header_up X-Real-IP {remote_host}
     header_up X-Forwarded-For {remote_host}
