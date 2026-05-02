@@ -17,10 +17,37 @@ services:
       - BWS_PROJECT_ID=${BWS_PROJECT_ID}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
+      interval: 60s
+      timeout: 5s
+      retries: 2
+      start_period: 20s
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy-proxy
+    # restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./logs/caddy:/var/log/caddy
+    depends_on:
+      - app
+    environment:
+      - TZ=Asia/Shanghai
+    # 内存限制适配512MB服务器，最多占用64MB
+    mem_limit: 64m
+    mem_reservation: 32m
+    # 关闭健康检查节省资源
+    healthcheck:
+      disable: true
+
+volumes:
+  caddy_data:
+  caddy_config:
 
 # 使用说明：
 # 1. 本地构建测试：podman-compose up --build

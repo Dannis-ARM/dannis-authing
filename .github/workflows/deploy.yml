@@ -157,13 +157,20 @@ jobs:
       - name: 代码检出（获取compose.yaml）
         uses: actions/checkout@v5
 
-      - name: 预处理compose.yaml，替换镜像地址（base64编码避免YAML解析问题）
-        id: compose_content
+      - name: 预处理compose.yaml
+        id: compose_preprocess
         run: |
           # 全局IMAGE_NAME已经是全小写，直接使用
           FULL_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
-          echo "content=$CONTENT" >> $GITHUB_OUTPUT
+          COMPOSE_CONTENT=$(cat compose.yaml | sed "s|image: ghcr.io/.*:latest|image: $FULL_IMAGE|g" | base64 -w 0)
+          echo "content=$COMPOSE_CONTENT" >> $GITHUB_OUTPUT
+
+      - name: 预处理Caddyfile
+        id: caddy_preprocess
+        run: |
+          # 直接读取当前代码库中的Caddyfile编码传输，完全和本次提交版本一致
+          CADDY_CONTENT=$(base64 -w 0 ./Caddyfile)
+          echo "content=$CADDY_CONTENT" >> $GITHUB_OUTPUT
 
       - name: 部署到服务器
         uses: appleboy/ssh-action@v1.2.0
@@ -203,8 +210,12 @@ jobs:
             cd ~/.activate/dannis-authing
             
             # 3. 解码base64内容写入compose.yaml，然后替换为ACR镜像地址
-            echo "${{ steps.compose_content.outputs.content }}" | base64 -d > compose.yaml
+            echo "${{ steps.compose_preprocess.outputs.content }}" | base64 -d > compose.yaml
             sed -i "s|image: ghcr.io/.*:latest|image: $ACR_IMAGE|g" compose.yaml
+            
+            # 4. 直接解码本次提交的Caddyfile到根目录
+            mkdir -p ./logs/caddy
+            echo "${{ steps.caddy_preprocess.outputs.content }}" | base64 -d > ./Caddyfile
             
             # 4. 从阿里云ACR拉取最新镜像（国内速度更快）
             echo "📥 从阿里云ACR拉取最新镜像..."

@@ -85,11 +85,15 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* 版权信息 */}
-        <div className="border-t border-slate-800 pt-8 mt-8 text-center text-slate-500 text-sm">
-          <p>© 2024 dannis-authing Inc. 保留所有权利。</p>
-          <p className="mt-2">ICP备案号：京ICP备XXXXXXX号</p>
-        </div>
+          {/* 版权信息 */}
+          <div className="border-t border-slate-800 pt-8 mt-8 text-center text-slate-500 text-sm">
+            <p>© 2024 dannis-authing Inc. 保留所有权利。</p>
+            <p className="mt-2">
+              <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 transition-colors">
+                浙ICP备2025196129号
+              </a>
+            </p>
+          </div>
       </div>
     </footer>
   );
